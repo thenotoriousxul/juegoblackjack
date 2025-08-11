@@ -493,26 +493,21 @@ export default class GamesController {
       });
     }
 
-    const playerIsOwner = game.owner === user.id;
-    if (playerIsOwner) {
-      //delete the game if the owner leaves
-      game.set({ isFinished: true });
-      await game.save();
-    }
-
-
-    game.players = game.players.filter(playerId => playerId !== user.id);
+    // Cuando cualquier jugador se va, forzar a todos al lobby
     game.is_active = false;
+    game.set({ isFinished: true });
     await game.save();
 
-    io.to(`game:${game._id}`).emit('gameNotify', { game: game._id });
+    // Notificar a todos los jugadores de la sala para que vuelvan al lobby
+    io.to(`game:${game._id}`).emit('forceLobby', { message: 'Un jugador ha salido. Todos vuelven al lobby.' });
 
-    await PlayerDeck.deleteMany({ playerId: user.id, gameId: game._id });
+    // Limpiar mazos de todos los jugadores de la partida
+    await PlayerDeck.deleteMany({ gameId: game._id });
+
     return response.ok({
-      message: 'Left game successfully',
+      message: 'Todos los jugadores han sido enviados al lobby.',
       data: game
     });
-
   }
 
   async restartGame({params, auth, response}: HttpContext) {

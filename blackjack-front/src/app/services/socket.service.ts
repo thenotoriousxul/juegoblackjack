@@ -56,26 +56,25 @@ export class SocketService {
     this.socket.on('connect', () => {
       console.log('✅ WebSocket conectado:', this.socket?.id);
       this.connected.next(true);
-      
-      // Re-join rooms we were already in
-      if (this.joinedRooms.size > 0) {
-        const rooms = Array.from(this.joinedRooms);
-        console.log('🔁 Reuniéndose a salas previas tras reconexión:', rooms);
-        rooms.forEach((gameId) => this.socket?.emit('join', gameId));
+      // Siempre hacer join a todas las salas activas con userId
+      const user = this.authService.currentUser();
+      const userId = user?.id;
+      const rooms = Array.from(this.joinedRooms);
+      if (rooms.length && userId) {
+        console.log('🔁 Reuniéndose a salas previas tras reconexión:', rooms, 'como user', userId);
+        rooms.forEach((gameId) => {
+          this.socket?.emit('join', gameId, userId);
+        });
       }
-      
-      // Process any pending room joins
-      if (this.pendingRoomJoins.length > 0) {
-        console.log('🔄 Procesando salas pendientes:', this.pendingRoomJoins);
+      if (this.pendingRoomJoins.length && userId) {
+        console.log('🔄 Procesando salas pendientes:', this.pendingRoomJoins, 'como user', userId);
         this.pendingRoomJoins.forEach(gameId => {
-          console.log(`🎯 Uniéndose a la sala pendiente: ${gameId}`);
-          this.socket?.emit('join', gameId);
+          this.socket?.emit('join', gameId, userId);
           this.joinedRooms.add(gameId);
         });
-        this.pendingRoomJoins = []; // Clear the queue
+        this.pendingRoomJoins = [];
       }
-      
-      queueMicrotask(() => this.appRef.tick()); // Schedule tick for next cycle
+      queueMicrotask(() => this.appRef.tick());
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -96,18 +95,35 @@ export class SocketService {
       this.gameNotifications.next(data);
       queueMicrotask(() => this.appRef.tick()); // Schedule tick for next cycle
     });
+
+    // Evento personalizado para forzar a todos al lobby
+    this.socket.on('forceLobby', (data: any) => {
+      console.log('🚪 Evento forceLobby recibido:', data);
+      // Notificamos a los listeners
+      this.forceLobbySubject.next(data);
+      queueMicrotask(() => this.appRef.tick());
+    });
   }
 
-  joinGameRoom(gameId: string): void {
+  // Observable para el evento forceLobby
+  private forceLobbySubject = new BehaviorSubject<any | null>(null);
+  public forceLobby$ = this.forceLobbySubject.asObservable();
+
+  public joinGameRoom(gameId: string): void {
     // Always track room to auto-rejoin on reconnects
     this.joinedRooms.add(gameId);
 
+    const user = this.authService.currentUser();
+    const userId = user?.id;
+    if (!userId) {
+      console.warn('No se puede unir a la sala: userId no disponible');
+      return;
+    }
     if (this.socket?.connected) {
-      console.log(`🎯 Uniéndose a la sala del juego: ${gameId}`);
-      this.socket.emit('join', gameId);
+      console.log(`🎯 Uniéndose a la sala del juego: ${gameId} como user ${userId}`);
+      this.socket.emit('join', gameId, userId);
     } else {
       console.log(`⏳ Socket no conectado, encolando sala: ${gameId}`);
-      // Add to pending queue if not already there
       if (!this.pendingRoomJoins.includes(gameId)) {
         this.pendingRoomJoins.push(gameId);
       }
@@ -119,11 +135,7 @@ export class SocketService {
       console.log(`🚪 Saliendo de la sala del juego: ${gameId}`);
       this.socket.emit('leave', gameId);
     }
-    
-    // Remove from tracking
     this.joinedRooms.delete(gameId);
-
-    // Remove from pending queue if it's there
     const index = this.pendingRoomJoins.indexOf(gameId);
     if (index > -1) {
       this.pendingRoomJoins.splice(index, 1);

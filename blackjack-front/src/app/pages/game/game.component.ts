@@ -88,6 +88,7 @@ export class GameComponent implements OnInit, OnDestroy {
   private socketSubscription?: Subscription;
   private authSubscription?: Subscription;
   private socketConnSubscription?: Subscription;
+  private forceLobbySubscription?: Subscription;
   
   private gameId: string = '';
 
@@ -97,6 +98,10 @@ export class GameComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+  // Emitir leave por socket antes de cerrar la pestaña o navegar fuera
+  window.addEventListener('beforeunload', this.handleBeforeUnload);
+  // Emitir leave por socket antes de cerrar la pestaña o navegar fuera
+  window.addEventListener('beforeunload', this.handleBeforeUnload);
     // Get game ID from route
     this.gameId = this.route.snapshot.params['id'];
     
@@ -172,6 +177,16 @@ export class GameComponent implements OnInit, OnDestroy {
       }
     });
 
+    // Suscribirse al evento forceLobby para redirigir a todos al lobby
+    this.forceLobbySubscription = this.socketService.forceLobby$.subscribe((data) => {
+      if (data) {
+        console.warn('⚡ Evento forceLobby recibido en frontend:', data);
+        alert('Un jugador ha salido. Todos han sido enviados al lobby.');
+        this.notificationService.showWarning('Un jugador ha salido', 'Todos han sido enviados al lobby.');
+        window.location.href = '/lobby';
+      }
+    });
+
     // Refresh state on reconnect to avoid missing events during brief disconnects
     this.socketConnSubscription = this.socketService.isConnected$.subscribe((connected) => {
       if (connected) {
@@ -185,15 +200,27 @@ export class GameComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    window.removeEventListener('beforeunload', this.handleBeforeUnload);
     this.gameSubscription?.unsubscribe();
     this.socketSubscription?.unsubscribe();
     this.authSubscription?.unsubscribe();
     this.socketConnSubscription?.unsubscribe();
-    
+    this.forceLobbySubscription?.unsubscribe();
     if (this.gameId) {
       this.socketService.leaveGameRoom(this.gameId);
     }
-  }
+    }
+
+    // Emitir leave por socket antes de cerrar la pestaña
+    private handleBeforeUnload = () => {
+      if (this.gameId && this.socketService['socket']?.connected) {
+        const user = this.authService.currentUser();
+        const userId = user?.id;
+        if (userId) {
+          this.socketService['socket'].emit('leave', this.gameId, userId);
+        }
+      }
+    }
 
   private loadGameData(): void {
     this.isLoading.set(true);
@@ -316,6 +343,12 @@ export class GameComponent implements OnInit, OnDestroy {
 
   exitGame(): void {
     if (confirm('¿Estás seguro de que quieres salir del juego?')) {
+      // Emitir leave solo al salir desde el botón
+      const user = this.authService.currentUser();
+      const userId = user?.id;
+      if (this.gameId && userId && this.socketService['socket']?.connected) {
+        this.socketService['socket'].emit('leave', this.gameId, userId);
+      }
       this.goToLobby();
     }
   }
