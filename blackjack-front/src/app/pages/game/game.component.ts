@@ -287,6 +287,10 @@ export class GameComponent implements OnInit, OnDestroy {
         
         if (value === -1) {
           this.notificationService.showWarning('¡Te quemaste!', 'Te pasaste de 21');
+          // Ocultar acciones de inmediato porque ya no puedes jugar y el turno avanzará
+          this.isMyTurn.set(false);
+          this.suppressActions.set(true);
+          sessionStorage.setItem(this.getSuppressKey(), '1');
         } else {
           this.notificationService.showInfo(
             `Carta: ${card.rank} de ${this.getSuitName(card.suit)}`, 
