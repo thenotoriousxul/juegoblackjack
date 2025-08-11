@@ -98,10 +98,6 @@ export class GameComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-  // Emitir leave por socket antes de cerrar la pestaña o navegar fuera
-  window.addEventListener('beforeunload', this.handleBeforeUnload);
-  // Emitir leave por socket antes de cerrar la pestaña o navegar fuera
-  window.addEventListener('beforeunload', this.handleBeforeUnload);
     // Get game ID from route
     this.gameId = this.route.snapshot.params['id'];
     
@@ -200,7 +196,6 @@ export class GameComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    window.removeEventListener('beforeunload', this.handleBeforeUnload);
     this.gameSubscription?.unsubscribe();
     this.socketSubscription?.unsubscribe();
     this.authSubscription?.unsubscribe();
@@ -208,19 +203,9 @@ export class GameComponent implements OnInit, OnDestroy {
     this.forceLobbySubscription?.unsubscribe();
     if (this.gameId) {
       this.socketService.leaveGameRoom(this.gameId);
-    }
+  }
     }
 
-    // Emitir leave por socket antes de cerrar la pestaña
-    private handleBeforeUnload = () => {
-      if (this.gameId && this.socketService['socket']?.connected) {
-        const user = this.authService.currentUser();
-        const userId = user?.id;
-        if (userId) {
-          this.socketService['socket'].emit('leave', this.gameId, userId);
-        }
-      }
-    }
 
   private loadGameData(): void {
     this.isLoading.set(true);

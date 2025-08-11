@@ -45,19 +45,6 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', async () => {
     console.log(`❌ Socket desconectado: ${socket.id}`);
-    const info = socketUserGameMap.get(socket.id);
-    if (info && info.gameId && info.userId) {
-      // Buscar la partida y verificar si el usuario sigue en ella
-      const game = await Game.findById(info.gameId);
-      if (game && game.is_active && game.players.includes(info.userId)) {
-        // Forzar a todos al lobby
-        game.is_active = false;
-        game.isFinished = true;
-        await game.save();
-        io.to(`game:${game._id}`).emit('forceLobby', { message: 'Un jugador se ha desconectado. Todos vuelven al lobby.' });
-        await PlayerDeck.deleteMany({ gameId: game._id });
-      }
-    }
     socketUserGameMap.delete(socket.id);
   });
 });
