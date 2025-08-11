@@ -122,15 +122,7 @@ import { IUser } from '../../models/user.model';
               </button>
             }
             
-            <!-- Debug info -->
-            <div class="text-white text-xs bg-red-800 p-2 rounded max-w-xs">
-              <div>Game Active: {{ game().is_active ? 'YES' : 'NO' }}</div>
-              <div>Is My Turn: {{ isMyTurn() ? 'YES' : 'NO' }}</div>
-              <div>Current User: {{ currentUser()?.fullName || 'NONE' }}</div>
-              <div>Ready: {{ currentPlayerDeck()?.isReady ? 'YES' : 'NO' }}</div>
-              <div>Stand: {{ currentPlayerDeck()?.isStand ? 'YES' : 'NO' }}</div>
-              <div>Busted: {{ currentPlayerDeck()?.totalValue === -1 ? 'YES' : 'NO' }}</div>
-            </div>
+          
           </div>
         </div>
       }

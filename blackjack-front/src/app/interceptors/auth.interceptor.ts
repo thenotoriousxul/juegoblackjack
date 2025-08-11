@@ -2,22 +2,15 @@ import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 import { NotificationService } from '../services/notification.service';
+import { Router } from '@angular/router';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const notificationService = inject(NotificationService);
+  const router = inject(Router);
   
   // Get token directly from localStorage to avoid circular dependency
   const token = localStorage.getItem('blackjack_token');
   
-  // Debug logs
-  if (req.url.includes('/me')) {
-    console.log('🔍 Interceptor /me request - Token:', !!token);
-    if (token) {
-      console.log('🔑 Enviando token:', token.substring(0, 20) + '...');
-    }
-  }
-  
-  // Clone the request and add auth header if token exists
   const authReq = token ? req.clone({
     setHeaders: {
       Authorization: `Bearer ${token}`
@@ -26,28 +19,16 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(authReq).pipe(
     catchError(error => {
-      // Debug log for /me errors
-      if (req.url.includes('/me')) {
-        console.log('❌ Error en /me:', error.status, error.statusText, error.error);
-      }
-      
-      // Handle authentication errors
       if (error.status === 401) {
-        console.log('🔒 Token inválido o expirado');
-        
-        // Clear localStorage for any 401 error
+        // Token inválido: limpiar y redirigir inmediatamente
         localStorage.removeItem('blackjack_token');
-        
-        // Only show notification for non-/me requests to avoid spam
-        if (!req.url.includes('/me')) {
-          notificationService.showError('Sesión Expirada', 'Por favor, inicia sesión nuevamente');
-        }
+        notificationService.showError('Sesión inválida', 'Tu sesión ha expirado o el token es inválido');
+        router.navigate(['/login']);
       } else if (error.status === 403) {
         notificationService.showError('Acceso Denegado', 'No tienes permisos para realizar esta acción');
       } else if (error.status >= 500) {
         notificationService.showError('Error del Servidor', 'Intenta nuevamente más tarde');
       }
-      
       return throwError(() => error);
     })
   );

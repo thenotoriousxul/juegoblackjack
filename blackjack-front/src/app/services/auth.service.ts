@@ -33,6 +33,27 @@ export class AuthService {
 
   constructor() {
     this.initializeAuth();
+
+    // Cerrar sesión si el token cambia/elimina desde otra pestaña o la consola
+    window.addEventListener('storage', (e) => {
+      if (e.key === this.TOKEN_KEY) {
+        const newToken = e.newValue;
+        const oldToken = e.oldValue;
+        if (!newToken || newToken !== oldToken) {
+          console.log('🔒 Cambio en token detectado via storage event. Cerrando sesión.');
+          this.clearAuthData();
+        }
+      }
+    });
+
+    // Verificación periódica local por si el token cambia en la misma pestaña sin emitir storage
+    setInterval(() => {
+      const token = this.getToken();
+      if (!token && this.isAuthenticated()) {
+        console.log('🔒 Token ausente detectado por verificación periódica. Cerrando sesión.');
+        this.clearAuthData();
+      }
+    }, 2000);
   }
 
   private initializeAuth(): void {
