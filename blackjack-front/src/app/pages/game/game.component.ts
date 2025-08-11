@@ -89,6 +89,7 @@ export class GameComponent implements OnInit, OnDestroy {
   private socketSubscription?: Subscription;
   private authSubscription?: Subscription;
   private socketConnSubscription?: Subscription;
+  private forceLobbySubscription?: Subscription;
   
   private gameId: string = '';
 
@@ -173,6 +174,14 @@ export class GameComponent implements OnInit, OnDestroy {
       }
     });
 
+    // Suscribirse al evento forceLobby para redirigir a todos al lobby
+    this.forceLobbySubscription = this.socketService.forceLobby$.subscribe((data) => {
+      if (data) {
+        this.notificationService.showWarning('Un jugador ha salido', 'Todos han sido enviados al lobby');
+        this.goToLobby();
+      }
+    });
+
     // Refresh state on reconnect to avoid missing events during brief disconnects
     this.socketConnSubscription = this.socketService.isConnected$.subscribe((connected) => {
       if (connected) {
@@ -190,9 +199,10 @@ export class GameComponent implements OnInit, OnDestroy {
     this.socketSubscription?.unsubscribe();
     this.authSubscription?.unsubscribe();
     this.socketConnSubscription?.unsubscribe();
+    this.forceLobbySubscription?.unsubscribe();
     
-    if (this.gameId) {
-      this.socketService.leaveGameRoom(this.gameId);
+    if (this.gameId && (this.socketService as any)['socket']?.connected) {
+      (this.socketService as any)['socket'].emit('leaveRoom', this.gameId);
     }
   }
 
@@ -332,11 +342,21 @@ export class GameComponent implements OnInit, OnDestroy {
 
   exitGame(): void {
     if (confirm('¿Estás seguro de que quieres salir del juego?')) {
+      // Emitir leave solo al salir desde el botón
+      const user = this.authService.getCurrentUser?.() || (this.authService as any).getCurrentUser?.();
+      const userId: number | undefined = user?.id;
+      if (this.gameId && userId && (this.socketService as any)['socket']?.connected) {
+        (this.socketService as any)['socket'].emit('leave', this.gameId, userId);
+      }
       this.goToLobby();
     }
   }
 
   goToLobby(): void {
+    // Limpiar salas del socket para evitar rejoin
+    if (this.gameId) {
+      this.socketService.leaveGameRoom(this.gameId);
+    }
     this.gameService.clearGame();
     this.router.navigate(['/lobby']);
   }
