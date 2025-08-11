@@ -525,13 +525,14 @@ export default class GamesController {
         message: 'Game not found'
       });
     }
-    if (game.winner === null) {
+    // Permitir reinicio si el juego ya terminó (con o sin ganador) o no está activo
+    if (!game.isFinished && game.is_active) {
       return response.badRequest({
         message: 'Game is not finished yet'
       });
     }
 
-  // Permitir que cualquier jugador reinicie la partida si ya terminó y todos están listos
+    // Permitir que cualquier jugador reinicie la partida si ya terminó y todos están listos
 
     if (game.players.length < 2) {
       return response.badRequest({
@@ -562,6 +563,7 @@ export default class GamesController {
         playerDeck.totalValue = 0;
         playerDeck.isReady = false;
         (playerDeck as any).isStand = false;
+        (playerDeck as any).isBusted = false;
         await playerDeck.save();
       }
 

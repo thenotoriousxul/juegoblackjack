@@ -39,6 +39,10 @@ import { IUser } from '../../models/user.model';
           <div class="text-yellow-400 text-2xl font-bold animate-pulse">
             🏆 {{ getWinnerName() }} ha ganado!
           </div>
+        } @else if (game().isFinished && !game().winner) {
+          <div class="text-yellow-300 text-xl font-semibold">
+            🏁 La partida terminó sin ganador
+          </div>
         }
       </div>
 
@@ -46,14 +50,14 @@ import { IUser } from '../../models/user.model';
       <div class="flex justify-center mb-6">
         @if (showOwnerActions()) {
           <div class="space-x-4">
-            @if (!game().is_active && allPlayersReady()) {
+            @if (!game().is_active && !game().winner && !game().isFinished && allPlayersReady()) {
               <button 
                 (click)="startGame.emit()"
                 class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
                 🚀 Iniciar Juego
               </button>
             }
-            @if (game().winner && !game().isFinished) {
+            @if ((game().winner || game().isFinished) && !game().is_active) {
               <button 
                 (click)="restartGame.emit()"
                 class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors">

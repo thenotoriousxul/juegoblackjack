@@ -150,7 +150,10 @@ export default class PlayerDecksController {
           const maxValue = Math.max(...validDecks.map(deck => deck.totalValue));
           game.winner = validDecks.find(deck => deck.totalValue === maxValue)?.playerId ?? null;
         } else {
+          // Sin ganador
           game.winner = null;
+          game.is_active = false;
+          game.isFinished = true as any;
         }
       }
       await game.save();
@@ -164,16 +167,19 @@ export default class PlayerDecksController {
         currentPlayerId: game.winner === null ? (game.players.filter(p => p.toString() !== String(game.owner ?? '')))[game.turn] : null
       });
 
-      // Si ya hay ganador, anunciar con nombre
-      if (game.winner !== null) {
+      // Si ya hay fin de partida (con o sin ganador), anunciar
+      if (!game.is_active) {
         let winnerName: string | null = null;
-        const winnerUser = await User.findBy('id', Number(game.winner));
-        winnerName = winnerUser?.fullName ?? null;
+        if (game.winner !== null && game.winner !== undefined) {
+          const winnerUser = await User.findBy('id', Number(game.winner));
+          winnerName = winnerUser?.fullName ?? null;
+        }
         io.to(`game:${game._id}`).emit('gameNotify', {
           game: game._id,
           type: 'game_finished',
           winner: game.winner,
-          winnerName: winnerName
+          winnerName: winnerName,
+          noWinner: game.winner === null
         });
       }
       return response.ok({
@@ -330,7 +336,10 @@ export default class PlayerDecksController {
         const maxValue = Math.max(...validDecks.map(deck => deck.totalValue));
         game.winner = validDecks.find(deck => deck.totalValue === maxValue)?.playerId ?? null;
       } else {
+        // Sin ganador
         game.winner = null;
+        game.is_active = false;
+        game.isFinished = true as any;
       }
     }
     await game.save();
@@ -340,8 +349,8 @@ export default class PlayerDecksController {
       turnIndex: game.turn,
       currentPlayerId: game.winner === null ? (game.players.filter(p => p.toString() !== String(game.owner ?? '')))[game.turn] : null
     });
-    if (game.winner !== null) {
-      // Buscar el nombre real del ganador en la tabla User (Lucid)
+    if (game.winner !== null || !game.is_active) {
+      // Buscar el nombre real del ganador si existe
       let winnerName: string | null = null;
       if (game.winner !== null && game.winner !== undefined) {
         const winnerUser = await User.findBy('id', Number(game.winner));
@@ -351,7 +360,8 @@ export default class PlayerDecksController {
         game: game._id,
         type: 'game_finished',
         winner: game.winner,
-        winnerName: winnerName
+        winnerName: winnerName,
+        noWinner: game.winner === null
       });
       return response.ok({
         message: 'Game finished',
