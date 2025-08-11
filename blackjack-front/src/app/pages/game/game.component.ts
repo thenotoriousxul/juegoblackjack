@@ -31,6 +31,7 @@ import { IUser } from '../../models/user.model';
           [currentUser]="currentUser()"
           [isOwner]="isOwner()"
           [isMyTurn]="effectiveIsMyTurn()"
+          [winnerNames]="winnerNames()"
           (startGame)="handleStartGame()"
           (restartGame)="handleRestartGame()"
           (readyUp)="handleReadyUp()"
@@ -83,7 +84,8 @@ export class GameComponent implements OnInit, OnDestroy {
   isMyTurn = signal(false);
   isLoading = signal(true);
   suppressActions = signal(false);
-
+  winnerNames = signal<string[] | null>(null);
+  
   // Subscriptions
   private gameSubscription?: Subscription;
   private socketSubscription?: Subscription;
@@ -147,6 +149,10 @@ export class GameComponent implements OnInit, OnDestroy {
         this.suppressActions.set(false);
         sessionStorage.removeItem(this.getSuppressKey());
       }
+      // Limpiar nombres de ganadores si el juego reinicia/está activo
+      if (game?.is_active) {
+        this.winnerNames.set(null);
+      }
     });
 
     this.gameService.playerDecks$.subscribe(decks => {
@@ -168,6 +174,14 @@ export class GameComponent implements OnInit, OnDestroy {
               this.suppressActions.set(false);
               sessionStorage.removeItem(this.getSuppressKey());
             }
+          }
+        }
+        if (type === 'game_finished') {
+          const names = (notification as any).winnerNames as string[] | undefined;
+          if (names && names.length >= 2) {
+            this.winnerNames.set(names);
+          } else {
+            this.winnerNames.set(null);
           }
         }
         this.refreshGameData();

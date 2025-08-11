@@ -27,13 +27,17 @@ import { IUser } from '../../models/user.model';
 
       <!-- Game Status -->
       <div class="text-center mb-6">
-        @if (!game().is_active && !game().isFinished) {
+        @if (!game().is_active && !game().isFinished && !winnerNames()?.length) {
           <div class="text-yellow-400 text-xl font-semibold">
             🕐 Esperando que todos los jugadores estén listos...
           </div>
-        } @else if (game().is_active && !game().winner) {
+        } @else if (game().is_active && !game().winner && !winnerNames()?.length) {
           <div class="text-green-400 text-xl font-semibold">
             🎮 Juego en curso - Turno: {{ getCurrentPlayerName() }}
+          </div>
+        } @else if (winnerNames() && winnerNames()!.length >= 2) {
+          <div class="text-yellow-300 text-2xl font-bold">
+            🤝 Empate: {{ winnerNames()!.join(' y ') }}
           </div>
         } @else if (game().winner) {
           <div class="text-yellow-400 text-2xl font-bold animate-pulse">
@@ -96,15 +100,6 @@ import { IUser } from '../../models/user.model';
             }
 
             @if (canAct()) {
-              <!-- Game Actions -->
-              @if (canCheckBlackjack()) {
-                <button 
-                  (click)="checkBlackjack.emit()"
-                  class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
-                  ⭐ Blackjack!
-                </button>
-              }
-              
               <button 
                 (click)="drawCard.emit()"
                 class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
@@ -160,6 +155,7 @@ export class GameTableComponent {
   currentUser = input<IUser | null>(null);
   isOwner = input<boolean>(false);
   isMyTurn = input<boolean>(false);
+  winnerNames = input<string[] | null>(null);
 
   // Outputs
   startGame = output<void>();
@@ -167,7 +163,6 @@ export class GameTableComponent {
   readyUp = output<void>();
   drawCard = output<void>();
   finishTurn = output<void>();
-  checkBlackjack = output<void>();
   requestReveal = output<void>();
 
   // Computed properties
@@ -186,8 +181,8 @@ export class GameTableComponent {
   });
 
   shouldShowAllValues = computed(() => {
-    // Show all values if you're the owner or game is finished
-    return this.isOwner() || !!this.game().winner;
+    // Show all values if you're the owner or game is finished or winner determined
+    return this.isOwner() || !!this.game().winner || !!this.game().isFinished;
   });
 
   remainingCards = computed(() => {
@@ -202,20 +197,7 @@ export class GameTableComponent {
 
   showPlayerActions = computed(() => {
     const result = this.currentUser() && !this.game().isFinished;
-    
-    console.log('🎮 showPlayerActions Debug:', {
-      currentUser: !!this.currentUser(),
-      userName: this.currentUser()?.fullName,
-      gameFinished: this.game().isFinished,
-      result
-    });
-    
     return result;
-  });
-
-  canCheckBlackjack = computed(() => {
-    const myDeck = this.currentPlayerDeck();
-    return myDeck && myDeck.count === 2 && this.game().turn === 0;
   });
 
   canAct = computed(() => {
@@ -253,18 +235,6 @@ export class GameTableComponent {
     const currentPlayer = this.playerDecks().find(deck => 
       deck.player.id === currentPlayerId
     );
-    
-    // Debug logs
-    console.log('🎮 Turn Debug:', {
-      currentPlayerIndex,
-      playingPlayers,
-      allPlayers: (this.game() as any).players,
-      owner: (this.game() as any).owner,
-      currentPlayerId,
-      playerDecks: this.playerDecks().map(d => ({ id: d.player.id, name: d.player.fullName })),
-      currentPlayer: currentPlayer?.player.fullName
-    });
-    
     return currentPlayer?.player.fullName || 'Desconocido';
   }
 
@@ -275,10 +245,8 @@ export class GameTableComponent {
 
     if (winnerId == null || Number.isNaN(winnerId)) return 'Desconocido';
 
-    // Intentar encontrar primero en los mazos (puede que en vista no-owner solo venga mi propio mazo)
     let name = this.playerDecks().find(deck => deck.player.id === winnerId)?.player.fullName;
 
-    // Si no está en mazos, buscar en game.players (puede ser array de IDs o de objetos usuario)
     if (!name) {
       const playersArray: any[] = (this.game() as any).players || [];
       const winnerUser = playersArray
@@ -286,14 +254,6 @@ export class GameTableComponent {
         .find((u: any) => Number(u?.id) === winnerId);
       name = winnerUser?.fullName;
     }
-
-    // Debug logs
-    console.log('🎮 Winner Debug:', {
-      winnerId,
-      players: (this.game() as any).players,
-      playerDecks: this.playerDecks().map(d => ({ id: d.player.id, name: d.player.fullName })),
-      resolvedName: name
-    });
 
     return name || 'Desconocido';
   }

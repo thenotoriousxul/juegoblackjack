@@ -57,7 +57,7 @@ import { IPlayerDeckWithPlayer } from '../../models/playerDeck.model';
 
       <!-- Hand Value and Info -->
       <div class="mt-3 text-center">
-        @if (gameStarted() && (isCurrentPlayer() || showAllValues())) {
+        @if ((gameStarted() || showAllValues()) && (isCurrentPlayer() || showAllValues())) {
           <div class="flex justify-center space-x-4 text-white">
             <span class="text-sm">
               Cartas: <span class="font-bold">{{ playerDeck().count || 0 }}</span>
@@ -102,8 +102,12 @@ export class PlayerHandComponent {
   });
 
   shouldShowCardBack = computed(() => {
-    // Show card backs for other players if game hasn't started or if it's not your deck
-    return !this.gameStarted() || (!this.isCurrentPlayer() && !this.showAllValues());
+    // Si el juego terminó o se permite ver todo, siempre mostrar frente
+    if (this.showAllValues()) return false;
+    // Antes de iniciar, mostrar dorso para todos excepto el dueño de la mano
+    if (!this.gameStarted()) return !this.isCurrentPlayer();
+    // Durante el juego: otros jugadores ven dorso
+    return !this.isCurrentPlayer();
   });
 
   isBusted = computed(() => {
