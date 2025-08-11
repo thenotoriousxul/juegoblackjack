@@ -94,11 +94,22 @@ export default class PlayerDecksController {
         message: 'Card not found'
       });
     }
-    playerDeck.totalValue += cardData.value ?? 0;
+    const rankValue = (rank: string | undefined | null) => {
+      if (!rank) return 0;
+      if (rank === 'A') return 1;
+      if (rank === 'J') return 11;
+      if (rank === 'Q') return 12;
+      if (rank === 'K') return 13;
+      const parsed = Number(rank);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    playerDeck.totalValue += rankValue(cardData.rank);
     
     // Solo si el jugador obtiene 21 con las primeras dos cartas (Blackjack real), gana automáticamente
     if (playerDeck.totalValue === 21 && playerDeck.deck.length === 2) {
       game.winner = user.id;
+      game.is_active = false;
+      game.isFinished = true as any;
       await playerDeck.save();
       await game.save();
       io.to(`game:${game._id}`).emit('gameNotify', {
@@ -148,7 +159,23 @@ export default class PlayerDecksController {
         const validDecks = playersDecks.filter(deck => deck.totalValue <= 21 && deck.totalValue > 0);
         if (validDecks.length > 0) {
           const maxValue = Math.max(...validDecks.map(deck => deck.totalValue));
-          game.winner = validDecks.find(deck => deck.totalValue === maxValue)?.playerId ?? null;
+          const winnersIds = validDecks.filter(deck => deck.totalValue === maxValue).map(d => Number(d.playerId));
+          if (winnersIds.length === 1) {
+            game.winner = winnersIds[0];
+          } else {
+            game.winner = null; // empate
+          }
+          game.isFinished = true as any;
+          game.is_active = false;
+          const winnerUsers = await User.query().whereIn('id', winnersIds);
+          const winnerNames = winnersIds.map(id => winnerUsers.find(u => u.id === id)?.fullName).filter((n): n is string => !!n);
+          io.to(`game:${game._id}`).emit('gameNotify', {
+            game: game._id,
+            type: 'game_finished',
+            winner: game.winner,
+            winners: winnersIds,
+            winnerNames
+          });
         } else {
           // Sin ganador
           game.winner = null;
@@ -179,6 +206,7 @@ export default class PlayerDecksController {
           type: 'game_finished',
           winner: game.winner,
           winnerName: winnerName,
+          // winners/winnerNames ya pudieron ser enviados arriba si hubo empate
           noWinner: game.winner === null
         });
       }
@@ -334,7 +362,23 @@ export default class PlayerDecksController {
       const validDecks = playersDecks.filter(deck => deck.totalValue <= 21 && deck.totalValue > 0);
       if (validDecks.length > 0) {
         const maxValue = Math.max(...validDecks.map(deck => deck.totalValue));
-        game.winner = validDecks.find(deck => deck.totalValue === maxValue)?.playerId ?? null;
+        const winnersIds = validDecks.filter(deck => deck.totalValue === maxValue).map(d => Number(d.playerId));
+        if (winnersIds.length === 1) {
+          game.winner = winnersIds[0];
+        } else {
+          game.winner = null; // empate
+        }
+        game.isFinished = true as any;
+        game.is_active = false;
+        const winnerUsers = await User.query().whereIn('id', winnersIds);
+        const winnerNames = winnersIds.map(id => winnerUsers.find(u => u.id === id)?.fullName).filter((n): n is string => !!n);
+        io.to(`game:${game._id}`).emit('gameNotify', {
+          game: game._id,
+          type: 'game_finished',
+          winner: game.winner,
+          winners: winnersIds,
+          winnerNames
+        });
       } else {
         // Sin ganador
         game.winner = null;
@@ -361,6 +405,7 @@ export default class PlayerDecksController {
         type: 'game_finished',
         winner: game.winner,
         winnerName: winnerName,
+        // winners/winnerNames ya pudieron ser enviados arriba si hubo empate
         noWinner: game.winner === null
       });
       return response.ok({
@@ -470,6 +515,7 @@ export default class PlayerDecksController {
     const maxValue = Math.max(...validDecks.map(deck => deck.totalValue));
     game.winner = validDecks.find(deck => deck.totalValue === maxValue)?.playerId ?? null;
     game.is_active = false;
+    game.isFinished = true as any;
     
     await game.save();
     io.to(`game:${game._id}`).emit('gameNotify', { 

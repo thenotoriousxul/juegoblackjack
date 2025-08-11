@@ -36,7 +36,8 @@ import { IUser } from '../../models/user.model';
           (readyUp)="handleReadyUp()"
           (drawCard)="handleDrawCard()"
           (finishTurn)="handleFinishTurn()"
-          (checkBlackjack)="handleCheckBlackjack()">
+          (checkBlackjack)="handleCheckBlackjack()"
+          (requestReveal)="handleRequestReveal()">
         </app-game-table>
       } @else {
         <!-- Error state -->
@@ -309,6 +310,21 @@ export class GameComponent implements OnInit, OnDestroy {
           this.notificationService.showWarning('No es BlackJack', 'No tienes BlackJack en esta mano');
         } else {
           this.notificationService.handleApiError(error, 'Error al verificar BlackJack');
+        }
+      }
+    });
+  }
+
+  handleRequestReveal(): void {
+    this.gameService.requestReveal(this.gameId).subscribe({
+      next: () => {
+        this.notificationService.showInfo('Destape solicitado', 'Se revelan las cartas y se determina el ganador');
+      },
+      error: (error) => {
+        if (error.status === 400) {
+          this.notificationService.showWarning('No puedes destapar', 'Debes tener exactamente 21');
+        } else {
+          this.notificationService.handleApiError(error, 'Error al solicitar destape');
         }
       }
     });

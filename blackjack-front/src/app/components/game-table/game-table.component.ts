@@ -87,7 +87,7 @@ import { IUser } from '../../models/user.model';
         <div class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-80 rounded-xl p-4">
           <div class="flex space-x-3">
             
-            @if (!game().is_active && !currentPlayerDeck()?.isReady) {
+            @if (!game().is_active && (currentUser()?.id !== game().owner) && !currentPlayerDeck()?.isReady) {
               <button 
                 (click)="readyUp.emit()"
                 class="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
@@ -116,6 +116,14 @@ import { IUser } from '../../models/user.model';
                 (click)="finishTurn.emit()"
                 class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
                 🛑 Terminar Turno
+              </button>
+            }
+
+            @if (canRequestReveal()) {
+              <button 
+                (click)="requestReveal.emit()"
+                class="bg-pink-600 hover:bg-pink-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
+                👁️ Destapar 21
               </button>
             }
             
@@ -160,6 +168,7 @@ export class GameTableComponent {
   drawCard = output<void>();
   finishTurn = output<void>();
   checkBlackjack = output<void>();
+  requestReveal = output<void>();
 
   // Computed properties
   currentPlayerDeck = computed(() => {
@@ -213,6 +222,11 @@ export class GameTableComponent {
     const myDeck = this.currentPlayerDeck();
     const can = !!(this.game().is_active && this.isMyTurn() && myDeck && myDeck.totalValue !== -1 && !myDeck.isStand);
     return can;
+  });
+
+  canRequestReveal = computed(() => {
+    const myDeck = this.currentPlayerDeck();
+    return !!(this.game().is_active && myDeck && myDeck.totalValue === 21);
   });
 
   // Methods

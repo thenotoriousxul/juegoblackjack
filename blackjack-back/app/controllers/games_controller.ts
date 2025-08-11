@@ -81,7 +81,17 @@ const startGame = async (gameId: string): Promise<IGame> => {
     const cards = await Card.find({ _id: { $in: cardsToGive } });
     playerDeck.deck = cardsToGive;
     playerDeck.count = cardsToGive.length;
-    playerDeck.totalValue = cards.reduce((sum, card) => sum + (card.value ?? 0), 0);
+    // Mapear valor por rank para cumplir regla: A=1, J=11, Q=12, K=13
+    const rankValue = (rank: string | undefined | null) => {
+      if (!rank) return 0;
+      if (rank === 'A') return 1;
+      if (rank === 'J') return 11;
+      if (rank === 'Q') return 12;
+      if (rank === 'K') return 13;
+      const parsed = Number(rank);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    playerDeck.totalValue = cards.reduce((sum, card) => sum + rankValue(card.rank), 0);
     // Si con las dos primeras cartas supera 21, pierde automáticamente
     if (playerDeck.totalValue > 21) {
       playerDeck.totalValue = -1;
@@ -89,6 +99,50 @@ const startGame = async (gameId: string): Promise<IGame> => {
     }
 
     await playerDeck.save();
+  }
+
+  // Ganador instantáneo por 21 con dos cartas: tomar el primero según orden de unión (excluyendo anfitrión)
+  const playingPlayersOrder = game.players.filter((playerId: number) => Number(playerId) !== Number(game.owner));
+  const playersDecksAfterDeal = await PlayerDeck.find({ gameId: game._id, playerId: { $ne: game.owner } });
+  const blackjackCandidatesList = playersDecksAfterDeal
+    .filter((d) => d.totalValue === 21 && d.deck.length === 2)
+    .map((d) => Number(d.playerId));
+  const blackjackCandidates = new Set(blackjackCandidatesList);
+  let instantWinner: number | null = null;
+  const orderedWinners: number[] = [];
+  for (const pid of playingPlayersOrder) {
+    if (blackjackCandidates.has(Number(pid))) {
+      orderedWinners.push(Number(pid));
+      if (instantWinner === null) instantWinner = Number(pid);
+    }
+  }
+
+  if (orderedWinners.length > 0) {
+    // Si hay más de uno, es empate; si hay uno, único ganador
+    if (orderedWinners.length === 1) {
+      game.winner = instantWinner;
+    } else {
+      game.winner = null;
+    }
+    game.is_active = false;
+    game.isFinished = true;
+    await game.save();
+
+    // Emitir fin de juego con nombres de ganadores
+    const winnerUsers = await User.query().whereIn('id', orderedWinners);
+    const winnerNames = orderedWinners
+      .map((id) => winnerUsers.find((u) => u.id === id)?.fullName)
+      .filter((n): n is string => !!n);
+    io.to(`game:${game._id}`).emit('gameNotify', {
+      game: game._id,
+      type: 'game_finished',
+      winner: game.winner,
+      winners: orderedWinners,
+      winnerNames
+    });
+
+    // Devolver el juego como antes
+    return game as IGame;
   }
 
   // Ajustar el turno inicial al primer jugador válido (no plantado ni quemado)
@@ -113,11 +167,34 @@ const startGame = async (gameId: string): Promise<IGame> => {
     const validDecks = playersDecks.filter((deck) => deck.totalValue <= 21 && deck.totalValue > 0);
     if (validDecks.length > 0) {
       const maxValue = Math.max(...validDecks.map((deck) => deck.totalValue));
-      game.winner = validDecks.find((deck) => deck.totalValue === maxValue)?.playerId ?? null;
+      const winnersIds = validDecks.filter((deck) => deck.totalValue === maxValue).map((d) => Number(d.playerId));
+      if (winnersIds.length === 1) {
+        game.winner = winnersIds[0];
+      } else {
+        game.winner = null;
+      }
+      game.is_active = false;
+      game.isFinished = true;
+
+      const winnerUsers = await User.query().whereIn('id', winnersIds);
+      const winnerNames = winnersIds
+        .map((id) => winnerUsers.find((u) => u.id === id)?.fullName)
+        .filter((n): n is string => !!n);
+      io.to(`game:${game._id}`).emit('gameNotify', {
+        game: game._id,
+        type: 'game_finished',
+        winner: game.winner,
+        winners: winnersIds,
+        winnerNames
+      });
+
+      await game.save();
+      return game as IGame;
     } else {
       game.winner = null;
+      game.is_active = false;
+      game.isFinished = true;
     }
-    game.is_active = false;
   }
 
   await game.save();
@@ -227,7 +304,7 @@ export default class GamesController {
         data: {
           isOwner: game.owner === user.id,
           game: gameWithoutDeck,
-          playersDecks: playersDecksWithData.filter(deck => deck.playerId === user.id),
+          playersDecks: playersDecksWithData, // Mostrar todos los oponentes; el front ya oculta valores
           isYourTurn: isPlayerTurn,
         }
       });
@@ -440,7 +517,17 @@ export default class GamesController {
       const cards = await Card.find({ _id: { $in: cardsToGive } });
       playerDeck.deck = cardsToGive;
       playerDeck.count = cardsToGive.length;
-      playerDeck.totalValue = cards.reduce((sum, card) => sum + (card.value ?? 0), 0);
+      // Mapear valor por rank para cumplir regla: A=1, J=11, Q=12, K=13
+      const rankValue = (rank: string | undefined | null) => {
+        if (!rank) return 0;
+        if (rank === 'A') return 1;
+        if (rank === 'J') return 11;
+        if (rank === 'Q') return 12;
+        if (rank === 'K') return 13;
+        const parsed = Number(rank);
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+      playerDeck.totalValue = cards.reduce((sum, card) => sum + rankValue(card.rank), 0);
 
       await playerDeck.save();
     }
