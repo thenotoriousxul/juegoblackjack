@@ -163,6 +163,19 @@ export default class PlayerDecksController {
         turnIndex: game.turn,
         currentPlayerId: game.winner === null ? (game.players.filter(p => p.toString() !== String(game.owner ?? '')))[game.turn] : null
       });
+
+      // Si ya hay ganador, anunciar con nombre
+      if (game.winner !== null) {
+        let winnerName: string | null = null;
+        const winnerUser = await User.findBy('id', Number(game.winner));
+        winnerName = winnerUser?.fullName ?? null;
+        io.to(`game:${game._id}`).emit('gameNotify', {
+          game: game._id,
+          type: 'game_finished',
+          winner: game.winner,
+          winnerName: winnerName
+        });
+      }
       return response.ok({
         message: 'Te has pasado de 21. Has perdido automáticamente.',
         data: {

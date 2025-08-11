@@ -252,20 +252,32 @@ export class GameTableComponent {
 
   getWinnerName(): string {
     if (!this.game().winner) return '';
-    // game.winner es un número (ID), no un objeto
-    const winnerId = this.game().winner;
-    const winner = this.playerDecks().find(deck => 
-      deck.player.id === winnerId
-    );
-    
+    const winnerField: any = (this.game() as any).winner;
+    const winnerId: number | null = typeof winnerField === 'object' ? Number(winnerField.id) : Number(winnerField);
+
+    if (winnerId == null || Number.isNaN(winnerId)) return 'Desconocido';
+
+    // Intentar encontrar primero en los mazos (puede que en vista no-owner solo venga mi propio mazo)
+    let name = this.playerDecks().find(deck => deck.player.id === winnerId)?.player.fullName;
+
+    // Si no está en mazos, buscar en game.players (puede ser array de IDs o de objetos usuario)
+    if (!name) {
+      const playersArray: any[] = (this.game() as any).players || [];
+      const winnerUser = playersArray
+        .map((p: any) => (typeof p === 'number' ? { id: p, fullName: undefined } : p))
+        .find((u: any) => Number(u?.id) === winnerId);
+      name = winnerUser?.fullName;
+    }
+
     // Debug logs
     console.log('🎮 Winner Debug:', {
       winnerId,
+      players: (this.game() as any).players,
       playerDecks: this.playerDecks().map(d => ({ id: d.player.id, name: d.player.fullName })),
-      foundWinner: winner?.player.fullName
+      resolvedName: name
     });
-    
-    return winner?.player.fullName || 'Desconocido';
+
+    return name || 'Desconocido';
   }
 
   getGameStatus(): string {
