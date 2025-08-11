@@ -1,0 +1,10 @@
+@if (authService.isInitializing()) {
+  <app-loading-spinner 
+    [fullScreen]="true"
+    text="Iniciando Casino..."
+    subText="Verificando sesión">
+  </app-loading-spinner>
+} @else {
+  <router-outlet />
+}
+<app-toast-notification />
